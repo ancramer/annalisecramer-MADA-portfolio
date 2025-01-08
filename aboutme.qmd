@@ -2,6 +2,31 @@
 title: "About me"
 ---
 
-Add some text and a figure describing myself.
+## Introduction 
 
-For details, see the exercise instructions. 
+Hi! My name is Annalise, but everyone calls me Annie. I use she/her pronouns.
+
+I'm a second year PhD student in the Epidemiology and Biostatistics Department. I work with Dr. Spencer Fox, and I broadly do stuff related to flu evolution-- currently, we're working on developing county by county risk for H5N1 based on childhood immunological imprinting. It's a work in progress :) 
+
+## Academic Background
+
+For undergrad, I attended Westfield State University in Westfield, MA (about half an hour south of UMass, if you're familiar). My bachelors are in biotechnology and general mathematics, I did half pure and half applied math. Working in a hospital lab during the height of covid developed my interest in respiratory viruses, and completing an REU in UGA's Odum School of Ecology fine tuned my infectious disease interests towards mathematical modeling. After graduating, I moved to Athens to begin my PhD.
+
+I have a strong preference for R, and I've used SAS for a few classes. In undergrad we used VBA/excel, but that's not very helpful for this field. I'm a stronger mathematician than programmer, but that's been shifting as I move through this degree program, and that's something that I hope this course will continue to push me towards. I've taken the department required courses (BIOS8010, BIOS8020, BIOS8030, BIOS8200) and a handful of STAT department courses to fill out my skillset (Bayesian statistics, Time series analysis). I'm making progress on building my data analysis skills on top of my mathematical background, but there's still plenty more to learn!
+
+I've completed several data analysis projects throughout my academic career, using data from phylogenetic sequences to survey data to case counts. I hope to get more into case count data and eventually move into forecasting. I'm hoping this course will help me gain more confidence working with data and staying organized.
+
+## Non-Academic background
+
+I grew up in rural Western Massachusetts, leading to my hobby for hiking. I especially like mountainy hikes with great views. I do a little day trip once or twice a month to go hiking somewhere in Northern GA/NC/TN. My all time favorite hike was with my brother in Death Valley. It's the only place I've been to where there's no encouragement to stay on the trails-- the climate is so extreme, humans can't do much damage, so we just walked across the salt flats for miles. We both preferred less busy environments, so we planned our trip for December to avoid crowds. Along the way, we found this [tool](https://www.nps.gov/subjects/socialscience/visitor-use-statistics-dashboard.htm) that helped us plan the trip. It's interesting to me to see the differences during 2020-2021, as well as effects of climate variation on visit counts. Additionally, the site provides visitation data sets.
+
+Since I'm newish to the area still, let me know your trail recommendations!
+
+![Me at Charlie's Bunion in Great Smoky Mountains NP, this past June. It was too cloudy to see the view.](me.jpg)
+
+
+
+
+
+
+

@@ -1,16 +1,7 @@
 ---
-title: "My website and data analysis portfolio"
+title: "Annie's website and data analysis portfolio for MADA"
 ---
 
-**Feel free to change the text below any way you want 😁!**
+# Hello!
 
-# Hello
-
-### And hello again
-
-Welcome to **my website** and _data analysis portfolio._ 
-
-
-* Please use the `Menu Bar` above to look around.
-* Have fun!
-
+Welcome to **my website**. Read about me in the _About Me_ tab.

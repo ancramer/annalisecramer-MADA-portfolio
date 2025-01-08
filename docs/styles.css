@@ -1,1 +1,20 @@
 /* css styles */
+/* Override primary color for the Pulse theme */
+/*  :root { /* 
+/*   --bs-primary: forestgreen; /* 
+/*  } /* 
+/* Change the header/navbar background color */
+.navbar {
+  background-color: forestgreen !important;
+  border-color: forestgreen !important;
+}
+
+/* Ensure the header text remains readable */
+.navbar a,
+.navbar-brand {
+  color: white !important;
+}
+
+.navbar a:hover {
+  color: lightgreen !important;
+}/* css styles */
