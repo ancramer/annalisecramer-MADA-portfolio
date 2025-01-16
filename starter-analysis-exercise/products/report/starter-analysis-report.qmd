@@ -40,6 +40,7 @@ _Provide enough background on your topic that others can understand the why and 
 
 ## Description of data and data source
 _Describe what the data is, what it contains, where it is from, etc. Eventually this might be part of a methods section._
+The data set came with Height, Weight, and Gender. on 1/16/25 I added numerical vairable Age (0-110) and categorical vairable Allergies (None, Soy, Wheat, Egg, Milk, Peanuts, Shellfish, Treenuts, Pollen, Latex).
 
 ## Questions/Hypotheses to be addressed
 _State the research questions you plan to answer with this analysis._
