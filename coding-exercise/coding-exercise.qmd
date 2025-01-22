@@ -2,4 +2,87 @@
 title: "R Coding Exercise"
 ---
 
-Placeholder file for the future R coding exercise.
+To start, I'll load packages.
+```{r}
+#install.packages("dslabs")
+library(tidyverse)
+library(dslabs)
+```
+
+Then, check out the package info and data.
+```{r}
+help(gapminder)
+str(gapminder)
+summary(gapminder)
+class(gapminder) #data frame, nice, I can use tidyverse on it
+```
+
+
+```{r}
+africadata <- gapminder |> #pull out the African countries' data
+  filter(continent == "Africa")
+```
+
+
+Next, I start making smaller dataframes with only specific variables within them.
+```{r}
+infants1 <- africadata |> #create object with just infant mortality and life expectancy
+  select(infant_mortality, life_expectancy)
+str(infants1) #its a data frame
+summary(infants1)
+  
+population1 <- africadata |> #create object with just population and life expectancy
+  select(population, life_expectancy)
+str(population1) #its a data frame
+summary(population1)
+```
+
+
+I'll make plots using ggplot. We can see that lower infant mortality is negatively correlated with higher life expectancy. Higher population is positively correlated with life expectancy. The data appears in "streaks" in both plots as this shows year by year data within each African country. I'll add a second set of plots colored by country to show this more clearly. 
+```{r}
+ggplot(data=infants1, aes(x=infant_mortality, y=life_expectancy)) +
+  geom_point()
+
+ggplot(data=population1, aes(x=population, y=life_expectancy)) +
+  geom_point() +
+  scale_x_log10()
+
+ggplot(data=africadata, aes(x=infant_mortality, y=life_expectancy, col=country)) +
+  geom_point()
+
+ggplot(data=africadata, aes(x=population, y=life_expectancy, col=country)) +
+  geom_point() +
+  scale_x_log10()
+```
+
+
+```{r}
+missing_data <- africadata |> #by year, count number of NAs AKA missings
+  group_by(year) |>
+  summarize(missing = sum(is.na(infant_mortality)))
+
+ggplot(data=missing_data, aes(x=year, y=missing)) + #make a bar plot to easily see when/where the NAs are
+  geom_col()
+```
+
+To avoid missingness, lets' pull only rhe data from 2000.
+```{r}
+africadata2000 <- africadata |> #pull out year 200 only
+  filter(year==2000)
+
+ggplot(data=africadata2000, aes(x=infant_mortality, y=life_expectancy, col=country)) + #make same plots as above, but only usiing year 2000
+  geom_point()
+
+ggplot(data=africadata2000, aes(x=population, y=life_expectancy, col=country)) +
+  geom_point()
+```
+
+
+Finally, I fit two simple linear models to the 2000 data, life expectency explained by infant mortality and then by population. Using alpha=0.05 as a cutoff, I will assume the null hypotheses to be each predictor is not associated with life expectancy. With a p-value of 2.83e-08, we reject the null hypothesis to conclude that infant moratlity is a significant predictor of life expectancy in African countries in 2000. With a p-value of 0.616, we fail to reject the null hypothesis to conlcude that population is not a significant predictor of life expectency in African countries in 2000.
+```{r}
+fit1 <- lm(data=africadata2000, life_expectancy~infant_mortality)
+fit2 <- lm(data=africadata2000, life_expectancy~population)
+
+summary(fit1)
+summary(fit2)
+```
