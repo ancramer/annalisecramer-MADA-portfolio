@@ -86,3 +86,155 @@ fit2 <- lm(data=africadata2000, life_expectancy~population)
 summary(fit1)
 summary(fit2)
 ```
+
+
+
+## This section contributed by Mohammed Zuber 
+
+```{r, echo=FALSE, message=FALSE}
+# loading the required R packages
+library(here)
+# the package dslabs will load the gapminder data
+library(dslabs)
+library(tidyverse) 
+library(knitr)
+```
+
+
+
+## Loading and Checking Data
+
+```{r}
+# help() function pulls up the help page for the data to see what it contains.
+help(research_funding_rates) 
+# str () give us the overview of the datasets
+str(research_funding_rates) 
+# summary () gives summary of data
+summary(research_funding_rates) 
+#class() function to check what type of object research_funding_rates is
+class(research_funding_rates) # obtaining the type of object research_funding_rates is
+```
+
+## Processing Data
+```{r}
+# Filtering the research funding data (I am not subsetting any data since the dataset is already very small)
+fundingdata <- research_funding_rates 
+
+# Getting an overview of the data structure
+str(fundingdata) 
+
+# Summary of fundingdata
+summary(fundingdata) 
+
+```
+```{r}
+# Load necessary package
+library(dplyr)
+
+# Create proportion_women_applicant and success rate difference
+fundingdata <- research_funding_rates %>%
+  mutate(
+    success_rate_difference = success_rates_men - success_rates_women, # Difference in success rates
+    proportion_women_applicants = applications_women / applications_total # Proportion of female applicants
+  )
+
+
+# Check if the new variables exist
+str(fundingdata)
+
+
+# Creating two new objects for further analysis
+funding_variable_one <- fundingdata %>% select(applications_total, success_rates_total)
+
+# Obtaining the structure of funding_variable_one
+str(funding_variable_one) 
+
+# Summarizing the details about funding_variable_one
+summary(funding_variable_one) 
+
+# Creating another dataset with only two variables as listed
+funding_variable_two <- fundingdata %>% select(proportion_women_applicants, success_rate_difference)
+
+# Obtaining the structure of funding_variable_two
+str(funding_variable_two) 
+
+# Obtaining the summary about the dataset funding_variable_two
+summary(funding_variable_two)  
+ 
+```
+
+## Plotting 
+### Figure 1 Scatterplot of Total Applications vs. Success Rate
+The scatterplot shows a negative trend, where disciplines with more applications tend to have lower success rates. Fields with fewer applications have higher success rates, possibly due to lower competition. In contrast, disciplines with over 500 applications see success rates drop below 15%, likely due to increased competition for limited funding. One outlier with 800+ applications and the lowest success rate suggests that some fields are highly competitive with stricter selection criteria.
+
+```{r}
+# Scatterplot of Total Applications vs. Success Rate
+ggplot(funding_variable_one, aes(x = applications_total, y = success_rates_total)) + 
+  geom_point(color = "blue", alpha = 0.7) +
+  labs(
+    title = "Total Applications vs. Success Rate",
+    x = "Total Applications",
+    y = "Overall Success Rate"
+  ) +
+  theme_minimal()
+```
+### Figure 2: Proportion of Female Applicants vs. Gender Success Rate Difference
+
+The scatterplot shows no clear correlation between the proportion of female applicants and the gender success rate difference, as points are scattered across both positive and negative values. Some disciplines with higher female representation still exhibit gender disparities in success rates. In certain fields, men have a higher success rate, while in others, women do better, indicating variability across disciplines. This suggests that factors beyond applicant proportion, such as funding policies or selection criteria, may influence gender differences in research funding success.
+```{r}
+#Scatterplot Proportion of Female Applicants vs. Gender Success Rate Difference
+ggplot(funding_variable_two, aes(x = proportion_women_applicants, y = success_rate_difference)) + 
+  geom_point(color = "red", alpha = 0.7) +
+  labs(
+    title = "Proportion of Female Applicants vs. Gender Success Rate Difference",
+    x = "Proportion of Female Applicants",
+    y = "Success Rate Difference (Men - Women)"
+  ) +
+  theme_minimal()
+```
+### Table 1:  Top Disciplines Based on Total Applications
+
+```{r}
+# Extracting the top disciplines based on total applications
+top_disciplines <- fundingdata %>%
+  select(discipline, applications_total, awards_total, awards_men, awards_women) %>%
+  arrange(desc(applications_total)) %>%  # Sorting by total applications
+  head(5)  # Displaying top 5 disciplines
+
+# Print the summary table
+print(top_disciplines)
+```
+### Figure 3: Total awards By Discipline
+
+```{r}
+# Creating a bar plot for total awards by discipline 
+ggplot(fundingdata, aes(x = reorder(discipline, awards_total), y = awards_total)) + 
+  geom_bar(stat = "identity", fill = "steelblue", color = "black") + 
+  labs(
+    title = "Total Awards by Discipline",
+    x = "Discipline",
+    y = "Total Awards"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate text for better readability
+
+```
+
+## Fitting a linear model
+
+In the first model, the p-value is less than 0.05 (0.0197). Therefore, this suggests that the number of applications is a significant predictor of success rates. The negative coefficient (-0.0149) indicates that as the number of applications increases, the success rate decreases, likely due to increased competition. The R-squared of 0.564 means that 56.4% of the variation in success rates is explained by the number of applications.
+
+In the second model, the p-value is greater than 0.05 (0.6013). Therefore, there is no strong statistical evidence to suggest that the proportion of female applicants is a significant predictor of the gender success rate difference. The R-squared of 0.041 means that only 4.1% of the variation in gender success rate differences is explained by the proportion of female applicants, which is weak. 
+
+```{r}
+# Linear model: Success Rate vs. Total Applications
+fit1 <- lm(success_rates_total ~ applications_total, data = fundingdata)
+# Linear model: Success Rate Difference vs. Proportion of Female Applicants
+fit2 <- lm(success_rate_difference ~ proportion_women_applicants, data = fundingdata)
+# Summary of the model
+summary(fit1)
+summary(fit2)
+
+```
+
+
