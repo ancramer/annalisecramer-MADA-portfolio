@@ -1,0 +1,136 @@
+---
+title: "Data Exercise"
+---
+
+To start, I'll load packages.
+```{r}
+library(tidyverse)
+```
+
+Here's the prompt I gave chatGPT:
+
+Write me code for R that generates data. I want the data to have 500 people who are in a clinical trial for a cancer drug. There should be roughly the same amount of males and females. Ages are 60-90, with more people in the mid to late 70s. Average BMI should be 28 for males, 30 for females. Age and BMI are slightly correlated, as age goes up, BMI slightly goes down. The study takes place over 2 years, with checkpoints every 3 months. There are 3 treatment groups, randomly assigned: placebo, 10mg, 20mg dose. Include a tumor variable that is measured in mm. Over time, the 20mg treatment group should show significant reduction in tumor size, the 10mg tumor group showing tumor staying the same size or slightly shrinking, and the placebo group can show anything in tumor size. Add a patient ID for each individual patient.
+
+```{r}
+set.seed(123)  # For reproducibility
+
+# Number of participants
+n <- 500  
+
+# Generate patient IDs
+patient_ids <- sprintf("P%03d", 1:n)  # P001, P002, ..., P500
+
+# Generate gender
+gender <- sample(c("Male", "Female"), n, replace = TRUE)
+
+# Generate ages (60-90) with more in mid to late 70s
+ages <- round(rnorm(n, mean = 76, sd = 6))
+ages <- pmax(pmin(ages, 90), 60)  # Keep within bounds
+
+# Generate BMI (correlated with age, decreasing slightly as age increases)
+bmi_male <- round(rnorm(n, mean = 28 - (ages - 76) * 0.1, sd = 2), 1)
+bmi_female <- round(rnorm(n, mean = 30 - (ages - 76) * 0.1, sd = 2), 1)
+bmi <- ifelse(gender == "Male", bmi_male, bmi_female)
+
+# Treatment groups (random assignment)
+treatment <- sample(c("Placebo", "10mg", "20mg"), n, replace = TRUE)
+
+# Number of time points (every 3 months for 2 years)
+time_points <- seq(0, 24, by = 3)  # Months
+
+# Baseline tumor size (randomly generated between 20mm-60mm)
+baseline_tumor <- round(runif(n, min = 20, max = 60), 1)
+
+# Function to model tumor size change based on treatment
+tumor_reduction <- function(base_size, treatment, time) {
+  if (treatment == "Placebo") {
+    return(base_size + rnorm(1, mean = 0, sd = 5))  # Tumor size fluctuates
+  } else if (treatment == "10mg") {
+    return(base_size * (1 - 0.005 * time) + rnorm(1, mean = 0, sd = 2))  # Small reduction
+  } else {  # 20mg group
+    return(base_size * (1 - 0.02 * time) + rnorm(1, mean = 0, sd = 2))  # Significant reduction
+  }
+}
+
+# Create dataset with repeated measures
+trial_data <- data.frame()
+for (i in 1:n) {
+  for (t in time_points) {
+    new_row <- data.frame(
+      Patient_ID = patient_ids[i],
+      Gender = gender[i],
+      Age = ages[i],
+      BMI = bmi[i],
+      Treatment = treatment[i],
+      Time = t,
+      Tumor_Size = max(tumor_reduction(baseline_tumor[i], treatment[i], t), 0)  # Ensure no negative values
+    )
+    trial_data <- rbind(trial_data, new_row)
+  }
+}
+
+# View first few rows
+head(trial_data)
+
+# Save to CSV
+#write.csv(trial_data, "clinical_trial_data.csv", row.names = FALSE)
+
+```
+
+Okay. First to test this code, I'm going to make a plot to look at the gender distribution, including making a dataset of only the starting values. They look alright.
+```{r}
+unique(trial_data$Gender)
+start <- trial_data %>%
+  filter(Time==0)
+ggplot(data=start, aes(x=Gender)) +
+  geom_bar()
+```
+
+Now, let's look at BMI at the start of the trial between males and females, and then at the end of the trial. It doesn't look like it changes over time. Looks like the code given by AI kept everyone's weight exactly the same, which isn't totally realistic. However, I didn't specify it to do this. We can see that it does show at the start of the trial that older people have slightly lower BMIs in both genders than younger people, as I asked.
+```{r}
+unique(trial_data$Time)
+end <- trial_data %>%
+  filter(Time==24)
+ggplot(data=start, aes(x=BMI, col=Gender)) +
+  geom_density(size=2)
+ggplot(data=end, aes(x=BMI, col=Gender)) +
+  geom_density(size=2)
+
+ggplot(data = trial_data, aes(x = Time, y = BMI, group = Patient_ID, color = Gender)) +
+  geom_line(alpha = 0.2) +  # Individual spaghetti lines with transparency
+  stat_summary(fun = mean, geom = "line", aes(group = Gender), size = 1.2, color = "black") +  # Mean lines
+  stat_summary(fun = mean, geom = "point", aes(group = Gender), size = 3, color = "black")  # Mean points
+
+ggplot(data = start, aes(x = Age, y = BMI, color = Gender)) +
+  geom_point(alpha = 0.6) +  # Scatter plot with transparency
+  geom_smooth(method = "lm", aes(group = Gender), se = FALSE)
+```
+
+Next, let's look at the distribution of treatment groups. They don't look perfectly even, but I asked for them to be randomly assignened and I guess I should have specified I meant for them to be even. 
+
+```{r}
+ggplot(data=start, aes(x=Treatment, fill=Treatment)) +
+  geom_bar()
+```
+
+Now, I'll look at the distribution of tumor size by treatment group. Looks good.
+```{r}
+ggplot(data=start, aes(x=Treatment, y=Tumor_Size, fill=Treatment)) +
+  geom_violin()
+
+ggplot(data=end, aes(x=Treatment, y=Tumor_Size, fill=Treatment)) +
+  geom_violin()
+```
+
+Next I will make a linear model to see if treatment group has an effect on tumor size. All parameters have p-values below an significance level of alpha=0.05, so we conclude that treatment group is a significant predictor of tumor size. 
+```{r}
+model1 <- lm(data=trial_data, Tumor_Size~Treatment)
+summary(model1)
+```
+
+I'm going to build a model that explores whther gender is a predictor for tumor size. I didn't ask the data to contain this association, so we shouldn't see a significant p-value. With a p-value of 0.434, we see that Gender is found to be a significant predictor of Tumor Size. Interesting.
+```{r}
+model2 <- lm(data=trial_data, Tumor_Size~Gender)
+summary(model2)
+```
+
