@@ -1,0 +1,110 @@
+---
+title: "CDC Data Exercise"
+---
+
+This data is from the CDC website, link [here](https://data.cdc.gov/Coronavirus-and-Other-Respiratory-Viruses/Examination-of-SARS-CoV-2-serological-test-results/hhvg-83jq/about_data). It shows information from information from recent serological tests on SARS-CoV-2 samples that examine positivity, reactivity, and anitbody counts. Specifically, it examines whether different tests determine if samples test positive or negative using different types of covid tests. The mNT titer level represents the most dilute possible solution of anitbody to neutralize the virus.
+
+
+To start, I'll load packages and the data. Looking at the structure of the data, we can see there's 204 obersvatinos and 14 variables. We will not look at all the vairables, so let's choose the ones we want.
+```{r}
+library(tidyverse)
+library(here)
+here()
+data <- read_csv(here("cdcdata-exercise", "Examination_of_SARS-CoV-2_serological_test_results_from_multiple_commercial_and_laboratory_platforms_with_an_in-house_serum_panel_20250205.csv"))
+data2 <- data %>%
+  select(`Sample #`, `PCR confirmed`, `Abbott Reactivity`, `Ortho Reactivity`, `In-House CDC ELISA Reactivity`, `mNT TITER (Log10)`)
+```
+
+First, let's look at the Sample # variable. It's just integers from 1 to 204, each occuring one time.
+```{r}
+unique(data2$`Sample #`)
+data2$`Sample #`
+ggplot(data=data2, aes(x=`Sample #`)) +
+  geom_bar()
+```
+
+Next, let's explore the variable for PCR confirmed. This variable is either negative or positive.
+```{r}
+unique(data2$`PCR confirmed`)
+count_table <- table(data2$`PCR confirmed`) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+
+Now we will look at the Abbott Reactivity vairable. There are two values, Reactive and Non-Reactive.
+```{r}
+unique(data2$`Abbott Reactivity`)
+count_table <- table(data2$`Abbott Reactivity`) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+
+Next, let us examine Ortho Reactivity. There are two values, Reactive and Non-Reactive. 
+```{r}
+unique(data2$`Ortho Reactivity`)
+count_table <- table(data2$`Ortho Reactivity`) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+
+
+
+One more reactivity test to examine. There are two responses for In-House CDC ELISA Reactivity, Reactive and Non-Reactive.
+```{r}
+unique(data2$`In-House CDC ELISA Reactivity`)
+count_table <- table(data2$`In-House CDC ELISA Reactivity`) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+
+Now, let us examine mNT TITER (Log10). This is not a character variable, it is numerical with continuous responses that ranger between 1 and 4. Many samples have a value of 1.
+```{r}
+unique(data2$`mNT TITER (Log10)`)
+ggplot(data=data2, aes(x=`mNT TITER (Log10)`)) +
+  geom_histogram(binwidth=0.1)
+```
+
+Returning to the different types of tests, we know most of these have the same results across samples. However, a few are different. I used AI to help write the code for reshpaing and plotting the data. We can see they arre very close.
+```{r}
+data3 <- data2 %>% #change the test data to all the same answers
+  mutate(`PCR confirmed` = recode(`PCR confirmed`, 
+                                     "Pos" = "yes", 
+                                     "Neg" = "no")) %>%
+  mutate(`Abbott Reactivity` = recode(`Abbott Reactivity`, 
+                                     "Reactive" = "yes", 
+                                     "Non-reactive" = "no")) %>%
+  mutate(`Ortho Reactivity` = recode(`Ortho Reactivity`, 
+                                     "Reactive" = "yes", 
+                                     "Non-reactive" = "no")) %>%
+  mutate(`In-House CDC ELISA Reactivity` = recode(`In-House CDC ELISA Reactivity`, 
+                                    "Reactive" = "yes", 
+                                     "Non-reactive" = "no"))
+
+# Reshape the dataset to long format for easy plotting
+data3_long <- data3 %>%
+  gather(key = "Test", value = "Outcome", 
+         `PCR confirmed`, `Abbott Reactivity`, 
+         `Ortho Reactivity`, `In-House CDC ELISA Reactivity`)
+
+# Ensure that Outcome is a factor with the correct levels
+data3_long$Outcome <- factor(data3_long$Outcome, levels = c("no", "yes"))
+
+# Create a stacked bar plot
+ggplot(data3_long, aes(x = Test, fill = Outcome)) + 
+  geom_bar(position = "fill") +  # Position 'fill' normalizes the height to proportions
+  labs(
+    title = "Comparison of Test Reactivity",
+    x = "Test",
+    y = "Proportion of Outcomes",
+    fill = "Reactivity Outcome"
+  ) +
+  scale_fill_manual(values = c("no" = "red3", "yes" = "forestgreen")) + 
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "top"
+  )
+```
+
