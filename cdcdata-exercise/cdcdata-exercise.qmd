@@ -107,4 +107,160 @@ ggplot(data3_long, aes(x = Test, fill = Outcome)) +
     legend.position = "top"
   )
 ```
+This section contributed by Pooja Gokhale.
+Based on the give data, I used an AI prompt to give me the code to generate synthetic data.
+I used the counts and percentages from the original data.
+For mNT Titer Log10, we will compute the mean and range.
+```{r}
+mean(data2$`mNT TITER (Log10)`)
+sd(data2$`mNT TITER (Log10)`)
+range(data2$`mNT TITER (Log10)`)
+```
+
+Using these, I got the folllowing code. The code was set to produce 200 observations.
+In the original dataset, about 125 out of 204 observations were in the range of 1, with others in the range of 2-3.7.
+So in the synthetic data, 60% of the values were assumed to be near 1 for mNT Titer Log10.
+
+```{r}
+set.seed(123)  # For reproducibility
+
+# Number of samples
+n_samples <- 200
+
+# Generate Sample Number
+sample_number <- 1:n_samples
+
+# Assign PCR Confirmed based on proportions
+pcr_confirmed <- sample(c("Pos", "Neg"), n_samples, replace = TRUE, prob = c(0.4265, 0.5735))
+
+# Assign Abbott Reactivity based on proportions
+abbott_reactivity <- sample(c("Reactive", "Non-reactive"), n_samples, replace = TRUE, prob = c(0.4118, 0.5882))
+
+# Assign Ortho Reactivity based on proportions
+ortho_reactivity <- sample(c("Reactive", "Non-reactive"), n_samples, replace = TRUE, prob = c(0.4118, 0.5882))
+
+# Assign In-house CDC ELISA Reactivity based on proportions
+inhouse_cdc_elisa <- sample(c("Reactive", "Non-reactive"), n_samples, replace = TRUE, prob = c(0.4216, 0.5784))
+
+# Generate mNT Titer (log10) values following the required distribution
+mnt_titer <- c(
+  rnorm(120, mean = 1.2, sd = 0.2),  # ~125 values near 1
+  rnorm(80, mean = 2.8, sd = 0.4)    # ~79 values in the 2-3.77 range
+)
+
+# Ensure values stay within the expected range
+mnt_titer[mnt_titer < 1] <- 1        # Clamp minimum to 1
+mnt_titer[mnt_titer > 3.7748] <- 3.7748  # Clamp maximum to 3.7748
+
+# Adjust mean and SD to match the target values
+while (abs(mean(mnt_titer) - 1.625) > 0.01 || abs(sd(mnt_titer) - 0.8635) > 0.01) {
+  mnt_titer <- scale(mnt_titer) * 0.8635 + 1.625  # Rescale to match mean & SD
+  mnt_titer[mnt_titer < 1] <- 1
+  mnt_titer[mnt_titer > 3.7748] <- 3.7748
+}
+
+# Shuffle the values to randomize order
+mnt_titer <- sample(mnt_titer, n_samples, replace = FALSE)
+
+# Combine into a data frame
+synthetic_data <- data.frame(
+  Sample_Number = sample_number,
+  PCR_Confirmed = pcr_confirmed,
+  Abbott_Reactivity = abbott_reactivity,
+  Ortho_Reactivity = ortho_reactivity,
+  Inhouse_CDC_ELISA = inhouse_cdc_elisa,
+  mNT_Titer_Log10 = mnt_titer
+)
+
+write.csv(synthetic_data, "synthetic_data.csv", row.names = FALSE)
+```
+
+Now let us look at the summary of this synthetic data.
+
+First. let's look at PCR confirmed
+```{r}
+count_table <- table(synthetic_data$PCR_Confirmed) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2))
+```
+About 58% are Negative, and 42% are Positive, compared to 57.35% and 42.65% in the original dataset.
+
+Now, let's look at Abbott reactivity
+```{r}
+count_table <- table(synthetic_data$Abbott_Reactivity) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+Here, 60.5% are non-reactive and 39.5% are Reactive, compared to 58.82% and 41.18% respectively in the original dataset.
+
+Now, let's look at Ortho reactivity
+```{r}
+count_table <- table(synthetic_data$Ortho_Reactivity) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+This is similar to Abbott reactivity, like the original dataset.
+
+Now, let's look at In-House CDC Elisa reactivity
+```{r}
+count_table <- table(synthetic_data$Inhouse_CDC_ELISA) #table of counts
+percentage_table <- prop.table(count_table) * 100 #table of percentages
+cbind(count_table, round(percentage_table, 2)) #combine them
+```
+Here, 57.5% are Non-reactive and 42.5% are Reactive, compared to 57.84% and 42.16% respectively in the original dataset.
+
+Now, let's look at mNT Titer Log10.
+```{r}
+ggplot(synthetic_data, aes(x=mNT_Titer_Log10)) +
+  geom_histogram(binwidth=0.1)
+```
+We can see that the distribution of the mNT Titer Log10 in the synthetic data is very similar to that of the original dataset.
+
+Now, let's plot the data.
+
+```{r}
+synthetic_data2 <- synthetic_data %>% #change the test data to all the same answers
+  mutate(PCR_Confirmed = recode(PCR_Confirmed, 
+                                     "Pos" = "yes", 
+                                     "Neg" = "no")) %>%
+  mutate(Abbott_Reactivity = recode(Abbott_Reactivity, 
+                                     "Reactive" = "yes", 
+                                     "Non-reactive" = "no")) %>%
+  mutate(Ortho_Reactivity = recode(Ortho_Reactivity, 
+                                     "Reactive" = "yes", 
+                                     "Non-reactive" = "no")) %>%
+  mutate(Inhouse_CDC_ELISA = recode(Inhouse_CDC_ELISA, 
+                                    "Reactive" = "yes", 
+                                     "Non-reactive" = "no"))
+
+# Reshape the dataset to long format for easy plotting
+synthetic_data_long <- synthetic_data2 %>%
+  gather(key = "Test", value = "Outcome", 
+         PCR_Confirmed, Abbott_Reactivity, 
+         Ortho_Reactivity, Inhouse_CDC_ELISA)
+
+# Ensure that Outcome is a factor with the correct levels
+synthetic_data_long$Outcome <- factor(synthetic_data_long$Outcome, levels = c("no", "yes"))
+
+# Create a stacked bar plot
+ggplot(synthetic_data_long, aes(x = Test, fill = Outcome)) + 
+  geom_bar(position = "fill") +  # Position 'fill' normalizes the height to proportions
+  labs(
+    title = "Comparison of Test Reactivity",
+    x = "Test",
+    y = "Proportion of Outcomes",
+    fill = "Reactivity Outcome"
+  ) +
+  scale_fill_manual(values = c("no" = "red3", "yes" = "forestgreen")) + 
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "top"
+  )
+```
+Similar to the original dataset, approximately 38% of the outcome was Yes, while 62% was No.
+
+Using the AI prompt, I was able to produce a synthetic dataset which was very similar to the original.
 
