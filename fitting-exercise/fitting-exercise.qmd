@@ -1,0 +1,295 @@
+---
+title: "Fitting Exercise"
+---
+
+To start, I'll load packages.
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(nlmixr2data)
+library(corrplot)
+library(here)
+```
+Load the data and explore variable names, then plot. Then write code to make a plot that shows a line for each individual, with DV on the y-axis and time on the x-axis. Stratify by dose (e.g., use a different color for each dose, or facets).
+```{r}
+data <- read_csv(here("fitting-exercise", "data", "Mavoglurant_A2121_nmpk.csv"))
+names(data) #WT=weight, CMP=compartment number, EVID=eventID, MDV=missingDV, AMT=DoseAmountKeyword, DV=dependentvariableMavoglurant, OCC=occasion, HT=height
+ggplot(data = data, aes(x = TIME, y = DV, color = factor(DOSE), group = ID)) +
+  geom_line() +
+  labs(
+    title = "Mavoglurant concentration over time by dose group",
+    x = "Time in hours",
+    y = "Mavoglurant Concentration (DV)",
+    color = "Dose")
+```
+
+Let us keep patients who only recived one dose.
+```{r}
+data2 <- data %>%
+  filter(OCC == 1)
+```
+
+Next, we will exclude observations with TIME=0, and compute the sum of each DV variable. We will select observations where time=0, too. Data3 combines sums of time $\ne$ 0 observations and time = 0 observations.
+```{r}
+data_no0 <- data2 %>%
+  filter(TIME != 0) #get observations where time is not 0
+
+data_sum <- data_no0 %>% #from those non time=0, sum by dose
+  group_by(ID) %>%
+  summarize(Y = sum(DV, na.rm = TRUE)) %>%
+  ungroup()
+
+data_with0 <- data2 %>%
+  filter(TIME == 0)
+
+data3 <- left_join(data_sum, data_with0, by="ID")
+```
+
+Below is code that converts RACE and SEX to factor variables and keeps only certain variables that we want to work with: Y,DOSE,AGE,SEX,RACE,WT,HT
+```{r}
+data4 <- data3 %>%
+  mutate(RACE = as.factor(RACE)) %>% #convert to factors
+  mutate(SEX = as.factor(SEX)) %>%
+  select(Y, DOSE, AGE, SEX, RACE, WT, HT)
+```
+
+Let's explore the data with tables and plots.
+
+First, we'll make a correlation plot, I used chatGPT to help with this. We can see most of these variables have weak correlations with each other, with the exception of Y/Dose and Weight/Height, both of which have moderately steong negative correlations.
+```{r}
+corr_matrix <- cor(data4[sapply(data4, is.numeric)], use = "complete.obs")
+
+# Plot the correlation matrix
+corrplot(corr_matrix, method = "circle", type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+         main = "Correlation Plot for data4")
+```
+
+We will next plot the distributions for our variables to check if they're reasonable. I used chatGPT to help with this becuase I was having trouble getting the data into the right format (long).
+
+I think most of these distributions look good. Dose shows a smallers group for the moderate dose, we will keep that in mind. Age shows a that people in their 30s are underrepresented, and perhaps those in their late 20s are overrepresented.
+```{r}
+# Select numeric columns only
+numeric_data4 <- data4 %>% select(where(is.numeric))
+
+# Pivot data to long format for ggplot
+long_data4 <- pivot_longer(numeric_data4, cols = everything(), names_to = "Variable", values_to = "Value")
+
+# Plot the distributions
+ggplot(long_data4, aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black", alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free") +
+  labs(title = "Distributions of Numeric Variables in data4", x = "Value", y = "Count") +
+  theme_minimal()
+```
+
+Now, let's make some scatterplots and boxplots.
+
+Notes:
+
+- Not much trend with Age or Weight 
+
+- Height shows fewer individuals with low height/high dose
+
+- Dose doesn't tell us much that we didn't already knkow from previous figures
+
+- Interested to know what races 7 and 88 are, I don't want to mess with them without access to a codebook-- could be unknown, don't know, NA, or multiple, some of those are valid answers
+
+- Sex has a few outliers but I am not going to remove them
+```{r}
+#scatterplots
+ggplot(data4, aes(x = AGE, y = Y)) +
+  geom_point(color = "dodgerblue2") +
+  labs(title = "Y vs Age", x = "Age", y = "Total Drug (Y)")
+
+ggplot(data4, aes(x = WT, y = Y)) +
+  geom_point(color = "indianred2") +
+  labs(title = "Y vs Weight", x = "Weight", y = "Total Drug (Y)")
+
+ggplot(data4, aes(x = HT, y = Y)) +
+  geom_point(color = "olivedrab3") +
+  labs(title = "Y vs Height", x = "Height", y = "Total Drug (Y)")
+
+ggplot(data4, aes(x = DOSE, y = Y)) +
+  geom_point(color = "darkorchid2") +
+  labs(title = "Y vs Dose", x = "Dose", y = "Total Drug (Y)")
+
+#boxplots
+ggplot(data4, aes(x = factor(RACE), y = Y)) +
+  geom_boxplot(fill = "hotpink2") +
+  labs(title = "Y vs Race", x = "Race", y = "Total Drug (Y)")
+
+ggplot(data4, aes(x = factor(SEX), y = Y)) +
+  geom_boxplot(fill = "orange2") +
+  labs(title = "Y vs Sex", x = "Sex", y = "Total Drug (Y)")
+```
+
+Next, a summary table with usefule summary statistics. ChatGPT helped with this.
+
+Means and medians are pretty close for all categories-- this tells me there's no crazy outliers.
+```{r}
+summary_table <- data4 %>%
+  summarise(across(where(is.numeric), 
+                   list(mean = ~ mean(.x, na.rm = TRUE),
+                        median = ~ median(.x, na.rm = TRUE),
+                        min = ~ min(.x, na.rm = TRUE),
+                        max = ~ max(.x, na.rm = TRUE)))) %>%
+  pivot_longer(everything(), names_to = c("variable", ".value"), names_sep = "_") %>%
+  mutate(range = paste0(min, " - ", max)) %>%
+  select(variable, mean, median, range)
+
+print(summary_table)
+```
+
+With our exploratory analysis complete, we will begin building models.
+
+Fit a linear model to the continuous outcome (Y) using the main predictor of interest, which we’ll assume here to be DOSE.
+```{r}
+model1 <- linear_reg()
+
+model1_fit <- 
+  model1 %>% 
+  fit(Y ~ DOSE, data = data4)
+
+model1_fit
+```
+Fit a linear model to the continuous outcome (Y) using all predictors.
+```{r}
+model2 <- linear_reg()
+
+model2_fit <- 
+  model2 %>% 
+  fit(Y ~ DOSE + AGE + SEX + RACE + WT + HT, data = data4)
+
+model2_fit
+```
+For both models, compute RMSE and R-squared and print them.
+```{r}
+#predictions for model1
+model1_pred <- predict(
+  model1_fit,
+  new_data = data4
+)
+
+#put predictions with data
+model1_result <- data4 %>%
+  select(Y, DOSE) %>%
+  bind_cols(model1_pred)
+
+#get RMSE
+model1_result %>%
+  yardstick::rmse(
+    truth = Y, 
+    estimate = .pred
+  )
+
+#get R^2
+model1_result %>%
+  yardstick::rsq(
+    truth = Y, 
+    estimate = .pred
+  )
+
+#do the same for model2 (full model)
+#predictions for model2
+model2_pred <- predict(
+  model2_fit,
+  new_data = data4
+)
+
+#put predictions with data, add other vairables
+model2_result <- data4 %>%
+  select(Y, DOSE, AGE, SEX, RACE, WT, HT) %>%
+  bind_cols(model2_pred)
+
+#get RMSE
+model2_result %>%
+  yardstick::rmse(
+    truth = Y, 
+    estimate = .pred
+  )
+
+#get R^2
+model2_result %>%
+  yardstick::rsq(
+    truth = Y, 
+    estimate = .pred
+  )
+
+```
+
+We will make the same reduced and full model, but this time SEX will be the outcome instead of Y.
+
+Fit a logistic model to the categorical/binary outcome (SEX) using the main predictor of interest, which we’ll again assume here to be DOSE.
+```{r}
+model3 <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+model3_fit <- model3 %>%
+  fit(SEX ~ DOSE, data = data4)
+
+```
+
+Fit a logistic model to SEX using all predictors.
+```{r}
+model4 <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+model4_fit <- model4 %>%
+  fit(SEX ~ DOSE + AGE + RACE + HT + WT + Y, data = data4)
+
+```
+
+For both models, compute accuracy and ROC-AUC and print them.
+```{r}
+#make predicitons for class
+model3_pred <- predict(model3_fit, new_data = data4)
+model4_pred <- predict(model4_fit, new_data = data4)
+
+#put predictions with data
+model3_result <- data4 %>%
+  bind_cols(model3_pred)
+model4_result <- data4 %>%
+  bind_cols(model4_pred)
+
+#calculate accuracy
+model3_accuracy <- metrics(data = tibble(truth = data4$SEX, predicted = model3_pred$.pred_class), 
+                    truth = truth, estimate = predicted)
+model4_accuracy <- metrics(data = tibble(truth = data4$SEX, predicted = model4_pred$.pred_class), 
+                    truth = truth, estimate = predicted)
+
+#print accuracy
+print(model3_accuracy)
+print(model4_accuracy)
+
+#make predictions for non-class
+model3_pred <- predict(model3_fit, new_data = data4, type = "prob")
+model4_pred <- predict(model4_fit, new_data = data4, type = "prob")
+
+#calculate ROC_AUC
+model3_roc_auc <- roc_auc(data = tibble(truth = data4$SEX,
+                                 .pred_1 = model3_pred$.pred_1), 
+                   truth = truth, .pred_1)
+
+model4_roc_auc <- roc_auc(data = tibble(truth = data4$SEX, 
+                                 .pred_1 = model4_pred$.pred_1), 
+                   truth = truth, .pred_1)
+
+print(model3_roc_auc)
+print(model4_roc_auc)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
