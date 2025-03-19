@@ -282,10 +282,171 @@ print(model4_roc_auc)
 
 ```
 
+This section marks the beginning of the modeule 10 exercise.
+```{r}
+rngseed = 1234 #use this later to set seed
+
+data5 <- data4 %>% #remove race vairbale because we won't be using it
+  select(Y, DOSE, AGE, SEX, WT, HT)
+
+set.seed(rngseed) #set seed
+
+data_split <- initial_split(data5, prop = 3/4) #3/4 of the data is for training
+
+train_data <- training(data_split) #create dataframes for the sets
+test_data  <- testing(data_split) #based on tidymodels instructions
+
+#now we will fit our two models
+model_dose <- linear_reg() #linear model with dose as predictor using training data
+model_dose_fit <- 
+  model_dose %>% 
+  fit(Y ~ DOSE, data = train_data)
+model_dose_fit 
+
+model_all <- linear_reg() #linear model with all productors using training data
+model_all_fit <- 
+  model_all %>% 
+  fit(Y ~ DOSE + AGE + SEX + WT + HT, data = train_data)
+model_all_fit
+```
+
+Next, we'll calculate the RMSE for these two new models and a null model.
+
+The null model has a RMSE of 948.35.
+
+The model with only dose as a predictor has a RMSE of 702.81.
+
+The full model has a RMSE of 627.44. This is the best model given this is the lowest RMSE out of the 3 models.
+```{r}
+set.seed(rngseed) #set seed
+
+#predictions for model1
+model_dose_pred <- predict(
+  model_dose_fit,
+  new_data = train_data)
+
+#put predictions with data
+model_dose_result <- train_data %>%
+  select(Y, DOSE) %>%
+  bind_cols(model_dose_pred)
+
+#get RMSE
+model_dose_result %>%
+  yardstick::rmse(
+    truth = Y, 
+    estimate = .pred)
+
+#do the same for the model with all predictors
+#predictions for model2
+model_all_pred <- predict(
+  model_all_fit,
+  new_data = train_data)
+
+#put predictions with data, add other vairables
+model_all_result <- train_data %>%
+  select(Y, DOSE, AGE, SEX, WT, HT) %>%
+  bind_cols(model_all_pred)
+
+#get RMSE
+model_all_result %>%
+  yardstick::rmse(
+    truth = Y, 
+    estimate = .pred)
+
+#I used chatGPT to help with this
+# Define null model
+null_mod <- null_model() %>%
+  set_engine("parsnip") %>%
+  set_mode("regression")
+
+# Create a workflow without specifying intercept
+null_wf <- workflow() %>%
+  add_model(null_mod) %>%
+  add_formula(Y ~ .)  # Only Y, no predictors will be used
+
+# Fit the null model
+null_fit <- fit(null_wf, data = train_data)
+
+# Get predictions from the null model
+null_preds <- predict(null_fit, train_data)
+
+# Combine predictions with actual data
+null_preds <- bind_cols(train_data, null_preds)
+
+# Calculate RMSE
+rmse_result <- rmse(null_preds, truth = Y, estimate = .pred)
+
+# Print the result
+print(rmse_result)
+```
+
+Now, we're going to do a 10-fold cross-validation with the testing data.
+
+The simple CV model has an RMSE of 690.54.
+
+The full CV model has an RMSE of 645.69.
+
+The cross validation process has the same conclusion as the earlier process-- that the full model is best, with lowest RMSE. However, it's not quite as low, and the single model has a much closer RMSE this time. I'd be interested to see if this holds with even more iterations.
+
+Next, I'm going to change the seed and rerun, then we'll see how the results look.
+
+With a different seed value, the single model has a RMSE of 691.72.
+
+The full model has a RMSE of 633.46.
+
+This agrees with earlier results, that the full model has the lowest RMSE. However, the single and full models aren't quite so close. This makes me feel more confident in these results.
+
+```{r}
+
+set.seed(1938) #set seed
+
+folds <- vfold_cv(train_data, v = 10) #set number of folds
+folds
+
+#for dose model
+dose_wf <- 
+  workflow() %>%
+  add_model(model_dose) %>%
+  add_formula(Y ~ DOSE)
+
+# 10-fold cv for model_dose
+dose_fit_rs <- 
+  dose_wf %>% 
+  fit_resamples(folds)
+dose_fit_rs
+# Collect metrics for model_dose
+dose_metrics <- collect_metrics(dose_fit_rs)
 
 
 
 
+#for model with all predictors
+all_wf <- 
+  workflow() %>%
+  add_model(model_all) %>%
+  add_formula(Y ~ DOSE + WT + AGE + SEX + HT)
+
+# 10-fold cv for model_all
+all_fit_rs <- 
+  all_wf %>% 
+  fit_resamples(folds)
+all_fit_rs
+
+# Collect metrics for model_all
+all_metrics <- collect_metrics(all_fit_rs)
+
+
+
+
+# Filter RMSE for both models
+dose_rmse <- dose_metrics %>% filter(.metric == "rmse")
+all_rmse <- all_metrics %>% filter(.metric == "rmse")
+
+# Print RMSE for both models
+print(dose_rmse)
+print(all_rmse)
+
+```
 
 
 
