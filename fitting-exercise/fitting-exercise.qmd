@@ -3,6 +3,7 @@ title: "Fitting Exercise"
 ---
 
 To start, I'll load packages.
+
 ```{r}
 library(tidyverse)
 library(tidymodels)
@@ -10,7 +11,9 @@ library(nlmixr2data)
 library(corrplot)
 library(here)
 ```
+
 Load the data and explore variable names, then plot. Then write code to make a plot that shows a line for each individual, with DV on the y-axis and time on the x-axis. Stratify by dose (e.g., use a different color for each dose, or facets).
+
 ```{r}
 data <- read_csv(here("fitting-exercise", "data", "Mavoglurant_A2121_nmpk.csv"))
 names(data) #WT=weight, CMP=compartment number, EVID=eventID, MDV=missingDV, AMT=DoseAmountKeyword, DV=dependentvariableMavoglurant, OCC=occasion, HT=height
@@ -24,12 +27,14 @@ ggplot(data = data, aes(x = TIME, y = DV, color = factor(DOSE), group = ID)) +
 ```
 
 Let us keep patients who only recived one dose.
+
 ```{r}
 data2 <- data %>%
   filter(OCC == 1)
 ```
 
 Next, we will exclude observations with TIME=0, and compute the sum of each DV variable. We will select observations where time=0, too. Data3 combines sums of time $\ne$ 0 observations and time = 0 observations.
+
 ```{r}
 data_no0 <- data2 %>%
   filter(TIME != 0) #get observations where time is not 0
@@ -46,6 +51,7 @@ data3 <- left_join(data_sum, data_with0, by="ID")
 ```
 
 Below is code that converts RACE and SEX to factor variables and keeps only certain variables that we want to work with: Y,DOSE,AGE,SEX,RACE,WT,HT
+
 ```{r}
 data4 <- data3 %>%
   mutate(RACE = as.factor(RACE)) %>% #convert to factors
@@ -56,6 +62,7 @@ data4 <- data3 %>%
 Let's explore the data with tables and plots.
 
 First, we'll make a correlation plot, I used chatGPT to help with this. We can see most of these variables have weak correlations with each other, with the exception of Y/Dose and Weight/Height, both of which have moderately steong negative correlations.
+
 ```{r}
 corr_matrix <- cor(data4[sapply(data4, is.numeric)], use = "complete.obs")
 
@@ -68,6 +75,7 @@ corrplot(corr_matrix, method = "circle", type = "upper",
 We will next plot the distributions for our variables to check if they're reasonable. I used chatGPT to help with this becuase I was having trouble getting the data into the right format (long).
 
 I think most of these distributions look good. Dose shows a smallers group for the moderate dose, we will keep that in mind. Age shows a that people in their 30s are underrepresented, and perhaps those in their late 20s are overrepresented.
+
 ```{r}
 # Select numeric columns only
 numeric_data4 <- data4 %>% select(where(is.numeric))
@@ -87,15 +95,16 @@ Now, let's make some scatterplots and boxplots.
 
 Notes:
 
-- Not much trend with Age or Weight 
+-   Not much trend with Age or Weight
 
-- Height shows fewer individuals with low height/high dose
+-   Height shows fewer individuals with low height/high dose
 
-- Dose doesn't tell us much that we didn't already knkow from previous figures
+-   Dose doesn't tell us much that we didn't already knkow from previous figures
 
-- Interested to know what races 7 and 88 are, I don't want to mess with them without access to a codebook-- could be unknown, don't know, NA, or multiple, some of those are valid answers
+-   Interested to know what races 7 and 88 are, I don't want to mess with them without access to a codebook-- could be unknown, don't know, NA, or multiple, some of those are valid answers
 
-- Sex has a few outliers but I am not going to remove them
+-   Sex has a few outliers but I am not going to remove them
+
 ```{r}
 #scatterplots
 ggplot(data4, aes(x = AGE, y = Y)) +
@@ -127,6 +136,7 @@ ggplot(data4, aes(x = factor(SEX), y = Y)) +
 Next, a summary table with usefule summary statistics. ChatGPT helped with this.
 
 Means and medians are pretty close for all categories-- this tells me there's no crazy outliers.
+
 ```{r}
 summary_table <- data4 %>%
   summarise(across(where(is.numeric), 
@@ -144,6 +154,7 @@ print(summary_table)
 With our exploratory analysis complete, we will begin building models.
 
 Fit a linear model to the continuous outcome (Y) using the main predictor of interest, which we’ll assume here to be DOSE.
+
 ```{r}
 model1 <- linear_reg()
 
@@ -153,7 +164,9 @@ model1_fit <-
 
 model1_fit
 ```
+
 Fit a linear model to the continuous outcome (Y) using all predictors.
+
 ```{r}
 model2 <- linear_reg()
 
@@ -163,7 +176,9 @@ model2_fit <-
 
 model2_fit
 ```
+
 For both models, compute RMSE and R-squared and print them.
+
 ```{r}
 #predictions for model1
 model1_pred <- predict(
@@ -221,6 +236,7 @@ model2_result %>%
 We will make the same reduced and full model, but this time SEX will be the outcome instead of Y.
 
 Fit a logistic model to the categorical/binary outcome (SEX) using the main predictor of interest, which we’ll again assume here to be DOSE.
+
 ```{r}
 model3 <- logistic_reg() %>%
   set_engine("glm") %>%
@@ -232,6 +248,7 @@ model3_fit <- model3 %>%
 ```
 
 Fit a logistic model to SEX using all predictors.
+
 ```{r}
 model4 <- logistic_reg() %>%
   set_engine("glm") %>%
@@ -243,6 +260,7 @@ model4_fit <- model4 %>%
 ```
 
 For both models, compute accuracy and ROC-AUC and print them.
+
 ```{r}
 #make predicitons for class
 model3_pred <- predict(model3_fit, new_data = data4)
@@ -283,6 +301,7 @@ print(model4_roc_auc)
 ```
 
 This section marks the beginning of the modeule 10 exercise.
+
 ```{r}
 rngseed = 1234 #use this later to set seed
 
@@ -317,6 +336,7 @@ The null model has a RMSE of 948.35.
 The model with only dose as a predictor has a RMSE of 702.81.
 
 The full model has a RMSE of 627.44. This is the best model given this is the lowest RMSE out of the 3 models.
+
 ```{r}
 set.seed(rngseed) #set seed
 
@@ -448,9 +468,116 @@ print(all_rmse)
 
 ```
 
+# This section added by Mohammed Zuber
 
+Now, here I am generating a scatter plot of observed vs. predicted values for all three models.
 
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
 
+# Combine predictions into a single dataframe
+model_dose_result <- model_dose_result %>%
+  mutate(model = "Model 1: DOSE only")
 
+model_all_result <- model_all_result %>%
+  mutate(model = "Model 2: All Predictors")
 
+null_preds <- null_preds %>%
+  mutate(model = "Null Model")
 
+# Combine all results
+all_predictions <- bind_rows(model_dose_result, model_all_result, null_preds)
+
+# Plot observed vs predicted values
+ggplot(all_predictions, aes(x = Y, y = .pred, color = model)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  labs(title = "Observed vs. Predicted Values",
+       x = "Observed Y",
+       y = "Predicted Y",
+       color = "Model") +
+  scale_x_continuous(limits = c(0, 5000)) +
+  scale_y_continuous(limits = c(0, 5000)) +
+  theme_minimal()
+
+```
+
+The scatter plot compares observed Y values to predicted Y values for three models: the null model, Model 1 (DOSE only), and Model 2 (all predictors). The null model predictions form a horizontal line, indicating it only predicts the mean Y value for all observations without considering any predictors. Model 1, which includes only DOSE as a predictor, shows three distinct horizontal lines, reflecting the limited number of dose levels and its inability to capture finer variations. Model 2, which includes all predictors, produces a more continuous spread of predictions that align more closely with the 45-degree reference line, indicating improved predictive accuracy. However, there is still some scatter around the diagonal, suggesting that additional factors not included in the model may influence Y. Overall, Model 2 performs the best, but further refinements or additional variables may be needed to improve prediction accuracy.
+
+Now Plotting predicted vs. residuals to check for patterns.
+
+```{r}
+# Compute residuals for Model 2
+model_all_result <- model_all_result %>%
+  mutate(residuals = .pred - Y)
+
+# Residuals plot
+ggplot(model_all_result, aes(x = .pred, y = residuals)) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals vs. Predicted Values (Model 2)",
+       x = "Predicted Values",
+       y = "Residuals") +
+  theme_minimal()
+
+```
+
+The residuals vs. predicted values plot for Model 2 shows that residuals are generally scattered around zero, indicating a reasonably good fit.
+
+In this step, I am Using bootstrapping to assess uncertainty in Model 2 predictions.
+
+```{r}
+
+# Set seed for reproducibility
+set.seed(rngseed)
+
+# Generate 100 bootstrap samples from training data
+boot_samples <- bootstraps(train_data, times = 100)
+
+# Function to fit Model 2 on a bootstrap sample and predict on training data
+bootstrap_preds <- map(boot_samples$splits, function(split) {
+  
+  # Extract bootstrap sample
+  data_sample <- analysis(split)
+  
+  # Fit Model 2 (full model) on the bootstrap sample
+  fit <- model_all %>% fit(Y ~ DOSE + AGE + SEX + WT + HT, data = data_sample)
+  
+  # Generate predictions on the original training data
+  predict(fit, new_data = train_data)$.pred
+})
+
+# Convert list of predictions into a matrix (rows: data points, columns: bootstrap samples)
+bootstrap_preds_matrix <- do.call(cbind, bootstrap_preds)
+
+# Compute the median and 89% confidence intervals (5.5% and 94.5% percentiles)
+bootstrap_summary <- apply(bootstrap_preds_matrix, 1, quantile, probs = c(0.055, 0.5, 0.945)) %>%
+  t() %>%  # Transpose for better structure
+  as.data.frame()
+
+# Rename columns for clarity
+colnames(bootstrap_summary) <- c("lower_bound", "median", "upper_bound")
+
+# Merge the bootstrap results with the observed values
+bootstrap_results <- train_data %>%
+  mutate(original_pred = model_all_result$.pred,  # Original model predictions
+         lower_bound = bootstrap_summary$lower_bound,  # Lower confidence bound
+         median = bootstrap_summary$median,  # Median bootstrap prediction
+         upper_bound = bootstrap_summary$upper_bound)  # Upper confidence bound
+
+# Visualization: Observed vs Predicted values with Bootstrap Confidence Intervals
+ggplot(bootstrap_results, aes(x = Y, y = original_pred)) +
+  geom_point(color = "blue", alpha = 0.6) +  # Original model predictions as black dots
+  geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound), width = 0.2, color = "purple") +  # CI bars
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +  # Ideal 45-degree line
+  scale_x_continuous(limits = c(0, 5000)) +  # Set x-axis range from 0 to 5000
+  scale_y_continuous(limits = c(0, 5000)) +  # Set y-axis range from 0 to 5000
+  labs(title = "Bootstrap Confidence Intervals for Model 2 Predictions",
+       x = "Observed",
+       y = "Predicted") +
+  theme_minimal()
+```
+
+The bootstrap confidence interval plot for Model 2 shows predicted values against observed values, with error bars representing the uncertainty in predictions. Most predictions align closely with the 45-degree reference line, indicating that the model performs reasonably well in capturing the true values. However, the presence of wider confidence intervals for some points suggests higher uncertainty in predictions, particularly at higher observed values. This implies that the model may have greater variability in its estimates for certain data points, possibly due to missing predictors or high noise in the data. While the majority of points follow the expected trend, a few deviations indicate that some observations are not well predicted, reinforcing the need for potential improvements. Overall, the model shows a strong predictive trend, but refinement through additional features or more complex modeling techniques may further enhance accuracy.
