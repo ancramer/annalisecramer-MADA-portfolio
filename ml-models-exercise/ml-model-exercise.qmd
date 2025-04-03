@@ -3,7 +3,7 @@ title: "Machine Learning Model Exercise"
 ---
 
 Load packages and choose base seed number.
-```{r}
+```{r, echo=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(corrplot)
