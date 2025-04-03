@@ -51,6 +51,9 @@ data4 <- data3 %>%
   mutate(RACE = as.factor(RACE)) %>% #convert to factors
   mutate(SEX = as.factor(SEX)) %>%
   select(Y, DOSE, AGE, SEX, RACE, WT, HT)
+
+here()
+saveRDS(data4, file = here("fitting-exercise", "data", "data4.rds"))
 ```
 
 Let's explore the data with tables and plots.
