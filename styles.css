@@ -18,3 +18,19 @@
 .navbar a:hover {
   color: lightgreen !important;
 }/* css styles */
+
+/* Change background color of the dropdown */
+.dropdown-menu {
+  background-color: mediumseagreen !important; /* Adjust as needed */
+}
+
+/* Change text color of dropdown items */
+.dropdown-menu .dropdown-item {
+  color: white !important; /* Adjust as needed */
+}
+
+/* Change text color on hover */
+.dropdown-menu .dropdown-item:hover {
+  background-color: lightgreen !important;
+  color: black !important;
+}
