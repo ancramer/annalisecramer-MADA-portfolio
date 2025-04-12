@@ -1,0 +1,466 @@
+---
+title: "Tidy Tuesday Exercise"
+---
+
+To start, I'll load packages.
+```{r, ECHO=FALSE}
+library(tidyverse)
+library(tidytuesdayR)
+library(cowplot)
+library(vip)
+library(tidymodels)
+```
+
+### EDA 
+
+Next, we'll load the data, using the code provided by the Tidy Tuesday team via github.
+```{r}
+tuesdata <- tidytuesdayR::tt_load('2025-04-08')
+
+care_state <- tuesdata$care_state
+```
+
+Let's check out the data a little bit. I read the article, so I know this is about emergenct room waiting times.
+
+There's 8 variables and 32 observations. There's a character state variable, a character condition variable, character measure_id variable, character measure name variable, double score vairable which means integer with more precision, character footnote variable, and a start date and end date variable. 
+
+State seems pretty stragithforward. Condition seems to be type of care the patient was in the hospital for, one of which is emergency department. Measure ID seems to be a shorthand code for measure name, which describes what the measure means. Some of these are weird and I'm not sure what they mean. Score is a list of numbers, I'm guessing it's what the number is for the specified meaure, and I see some NAs to deal with. Footnote is only a few unique answers that are numebrs and NA, I don't know what it means. Start date and end date a pretty straightforwards. 
+
+Most variables look like they have okay distirbutions, except for footnote and score, where there's a lot of NAs. 
+
+```{r}
+glimpse(care_state)
+names(care_state)
+
+unique(care_state$condition)
+unique(care_state$measure_id)
+unique(care_state$measure_name)
+unique(care_state$score)
+unique(care_state$footnote)
+unique(care_state$state)
+
+ggplot(data = care_state, aes(x = fct_explicit_na(condition, na_level = "Missing"))) +
+  geom_bar(fill = "steelblue") +
+  theme_cowplot() +
+  labs(x = "Condition", y = "Count", title = "Responses for Condition") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+  
+#this tells me that the same metrics were collected for each hospital I think
+ggplot(data = care_state, aes(x = fct_explicit_na(measure_id, na_level = "Missing"))) +
+  geom_bar(fill = "steelblue") +
+  theme_cowplot() +
+  labs(x = "measure_id", y = "Count", title = "Responses for measure_id") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  ylim(0,60)
+
+ggplot(data = care_state, aes(x = score)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "steelblue", na.rm = FALSE) +  # Include NAs
+  theme_cowplot() +
+  labs(x = "score", y = "Count", title = "Responses for score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+
+#this looks crazy but it shows there's a lot of NAs and I'll have to do something about that
+ggplot(data = care_state, aes(x = fct_explicit_na(as.factor(score), na_level = "Missing"))) +
+  geom_bar(fill = "steelblue", color = "black") +
+  theme_cowplot() +
+  labs(x = "Score", y = "Count", title = "Responses of Scores (Including Missing)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8))
+
+#22 data points per state roughly
+ggplot(data = care_state, aes(x = fct_explicit_na(state, na_level = "Missing"))) +
+  geom_bar(fill = "steelblue") +
+  theme_cowplot() +
+  labs(x = "state", y = "Count", title = "Responses for state") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  ylim(0,25)
+
+#footnote and score have a lot of missing answers 
+care_state %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "missing_count") %>%
+  ggplot(aes(x = reorder(variable, -missing_count), y = missing_count)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Missing Values per Variable",
+       x = "Variable",
+       y = "Number of Missing Values") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Here's summaries of our variables. Might need these for future reference, maybe not.
+```{r}
+summary(care_state)
+```
+
+### Data cleaning and processing
+
+First, I'll take out US territories, because I think I'm only going to look at states.
+```{r}
+# List of non-state abbreviations
+non_states <- c("AS", "DC", "GU", "MP", "PR", "VI")
+
+#remove non-states
+care_state <- care_state |>
+  filter(!(state %in% non_states))
+```
+
+I'm going to remove observations with missing score, becuase it's not providing useful information. I'm not going to remove observations with a missing footnote, because from my understanding, that just means there's no extra info to note, and I don't think that's a problem.
+```{r}
+care_state <- care_state %>%
+  filter(!is.na(score))
+```
+
+I will add US Census Region onto the data for future use.
+```{r}
+
+census_regions <- list(
+  New_England = c("CT", "ME", "MA", "NH", "RI", "VT"),
+  Mid_Atlantic = c("NJ", "NY", "PA"),
+  
+  East_North_Central = c("IL", "IN", "MI", "OH", "WI"),
+  West_North_Central = c("IA", "KS", "MN", "MO", "NE", "ND", "SD"),
+  
+  South_Atlantic = c("DE", "FL", "GA", "MD", "NC", "SC", "VA", "DC", "WV"),
+  East_South_Central = c("AL", "KY", "MS", "TN"),
+  West_South_Central = c("AR", "LA", "OK", "TX"),
+  
+  Mountain = c("AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY"),
+  Pacific = c("AK", "CA", "HI", "OR", "WA")
+)
+
+region_lookup <- bind_rows(
+  lapply(names(census_regions), function(region) {
+    data.frame(state = census_regions[[region]], region = region)
+  })
+)
+
+care_state <- care_state %>%
+  left_join(region_lookup, by = c("state" = "state"))
+
+glimpse(care_state)
+```
+
+Lastly, I will shift this data to a wide format rather than long to make it easier to work with, and rename the variables to shorter names.
+```{r}
+care_wide <- care_state |>
+  select(state, region, measure_name, score) |>
+  pivot_wider(
+    names_from = measure_name,
+    values_from = score,
+    values_fn = mean
+  )
+
+#There's duplicates for average time spent in ER Dept, so I chose to average them together
+care_state |>
+  dplyr::group_by(state, measure_name) |>
+  dplyr::summarize(n = n()) |>
+  dplyr::filter(n > 1)
+
+#rename to make them easier to work with
+care_wide <- care_wide |> 
+  rename(
+    covid_vax_pct = `Percentage of healthcare personnel who are up to date with COVID-19 vaccinations`,
+    flu_vax_pct = `Healthcare workers given influenza vaccination Higher percentages are better`,
+    ed_visit_median_time = `Average (median) time patients spent in the emergency department before leaving from the visit A lower number of minutes is better`,
+    ed_home_high = `Average time patients spent in the emergency department before being sent home A lower number of minutes is better (high)`,
+    ed_home_low = `Average time patients spent in the emergency department before being sent home A lower number of minutes is better (low)`,
+    ed_home_moderate = `Average time patients spent in the emergency department before being sent home A lower number of minutes is better (moderate)`,
+    ed_psych_median = `Average (median) time patients spent in the emergency department before leaving from the visit- Psychiatric/Mental Health Patients.  A lower number of minutes is better`,
+    ed_psych_high = `Average time patients spent in the emergency department before leaving from the visit - Psychiatric/Mental Health Patients.  A lower number of minutes is better (high)`,
+    ed_psych_low = `Average time patients spent in the emergency department before leaving from the visit - Psychiatric/Mental Health Patients.  A lower number of minutes is better (low)`,
+    ed_psych_moderate = `Average time patients spent in the emergency department before leaving from the visit - Psychiatric/Mental Health Patients.  A lower number of minutes is better (moderate)`,
+    ed_left_pct = `Percentage of patients who left the emergency department before being seen Lower percentages are better`,
+    stroke_scan_pct = `Percentage of patients who came to the emergency department with stroke symptoms who received brain scan results within 45 minutes of arrival Higher percentages are better`,
+    colonoscopy_followup_pct = `Percentage of patients receiving appropriate recommendation for follow-up screening colonoscopy Higher percentages are better`,
+    opioid_safety = `Safe Use of Opioids - Concurrent Prescribing`,
+    sepsis_care_pct = `Percentage of patients who received appropriate care for severe sepsis and septic shock. Higher percentages are better`,
+    sepsis_3hr = `Septic Shock 3-Hour Bundle`,
+    sepsis_6hr = `Septic Shock 6-Hour Bundle`,
+    severe_sepsis_3hr = `Severe Sepsis 3-Hour Bundle`,
+    severe_sepsis_6hr = `Severe Sepsis 6-Hour Bundle`,
+    ed_psych_very_high = `Average time patients spent in the emergency department before leaving from the visit - Psychiatric/Mental Health Patients.  A lower number of minutes is better (very high)`,
+    cataract_success_pct = `Percentage of patients who had cataract surgery and had improvement in visual function within 90 days following the surgery Higher percentages are better`
+  )
+
+```
+
+### Research Question
+
+We're going to examine the percent of hospital workers who meet requirements for COVID vaccination. We have data for all 50 states, but will split into training and testing to evaluate how well we can prdict by region.
+
+I will be using the census designated regions, as follows:
+
+New_England = "CT", "ME", "MA", "NH", "RI", "VT"
+
+Mid_Atlantic = "NJ", "NY", "PA"
+  
+East_North_Central = "IL", "IN", "MI", "OH", "WI"
+
+West_North_Central = "IA", "KS", "MN", "MO", "NE", "ND", "SD"
+  
+South_Atlantic = "DE", "FL", "GA", "MD", "NC", "SC", "VA", "DC", "WV"
+
+East_South_Central = "AL", "KY", "MS", "TN"
+
+West_South_Central = "AR", "LA", "OK", "TX"
+  
+Mountain = "AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY"
+
+Pacific = "AK", "CA", "HI", "OR", "WA"
+
+### Model building
+
+$\textbf{Model 1: simple linear regression with cross validation}$
+
+Our first model will be a simple linear model. We will split the data as 60% training and 40% testing. Region and flu vaccine adherence will be used as predictors. Based on the plot, this doesn't look like a great model. The RMSE is 10.79306166.
+```{r}
+names(care_wide)
+
+#set seen
+set.seed(1234)
+
+#split 60% training 40% testing, stratified by region
+split <- initial_split(care_wide, prop = 0.6, strata = region)
+train_data <- training(split)
+test_data <- testing(split)
+
+#use region and flu vax % as predictors for covid vax %
+vax_rec <- recipe(covid_vax_pct ~ region + flu_vax_pct, data = train_data) %>%
+  step_dummy(all_nominal_predictors())  # convert region to dummies
+
+#make linear model
+lm_spec <- linear_reg() %>%
+  set_engine("lm")
+
+#workflow
+vax_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(vax_rec)
+
+#fit model
+vax_fit <- fit(vax_wf, data = train_data)
+
+#make predictions
+preds <- predict(vax_fit, test_data) %>%
+  bind_cols(test_data)
+
+#evaluate preformance 
+preds %>%
+  metrics(truth = covid_vax_pct, estimate = .pred)
+
+ggplot(preds, aes(x = covid_vax_pct, y = .pred, label = state)) +
+  geom_point(color="dodgerblue3") +
+  geom_text(nudge_y = 1, size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color="firebrick") +
+  labs(x = "Actual COVID Vax %", y = "Predicted", title = "Prediction vs Test Set") +
+  theme_minimal() #gridlines help
+
+```
+
+$\textbf{Model 2: Lasso Regression}$
+
+Our second model will be a LASSO model. We will split the data as 60% training and 40% testing, same as before. Region and flu vaccine adherence will be used as predictors just like earlier.  The RMSE is 8.676324 for the best model.
+
+Noteably, the highest penalty model has the lowest RMSE. This uses a lot of shrinkage, and is at risk for underfitting, so this may not be the best model even if it has a low RMSE. 
+
+```{r}
+# Set seed for reproducibility
+set.seed(1234)
+
+# 1. Define the LASSO model (mixture = 1 for LASSO)
+lasso_mod <- linear_reg(penalty = tune(), mixture = 1) %>% 
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+# 2. Recipe with preprocessing
+lasso_rec <- recipe(covid_vax_pct ~ region + flu_vax_pct, data = train_data) %>%
+  step_novel(all_nominal_predictors()) %>%     # handle unseen categories
+  step_dummy(all_nominal_predictors()) %>%     # one-hot encode region
+  step_zv(all_predictors()) %>%                # remove zero variance columns
+  step_normalize(all_predictors())             # normalize predictors
+
+# 3. Workflow
+lasso_wf <- workflow() %>%
+  add_model(lasso_mod) %>%
+  add_recipe(lasso_rec)
+
+# 4. 5-fold cross-validation
+set.seed(1234)
+cv_folds <- vfold_cv(train_data, v = 5)
+
+# 5. Grid of penalty values
+penalty_grid <- grid_regular(penalty(), levels = 50)
+
+# 6. Tune the model
+lasso_tune_res <- tune_grid(
+  lasso_wf,
+  resamples = cv_folds,
+  grid = penalty_grid,
+  metrics = metric_set(rmse)
+)
+
+# 7. Review results
+lasso_results <- collect_metrics(lasso_tune_res)
+
+# 8. Plot tuning results
+ggplot(lasso_results, aes(x = penalty, y = mean)) +
+  geom_point() +
+  geom_line() +
+  scale_x_log10() +
+  labs(title = "LASSO Tuning Results",
+       x = "Penalty (log scale)",
+       y = "RMSE")
+
+# 9. Select best model
+best_lasso <- select_best(lasso_tune_res, metric = "rmse")
+
+# 10. Finalize workflow with best penalty
+final_lasso_wf <- finalize_workflow(lasso_wf, best_lasso)
+
+# 11. Fit final model on training data
+final_lasso_fit <- final_lasso_wf %>% fit(data = train_data)
+
+# 12. Predict on test set
+lasso_preds <- predict(final_lasso_fit, new_data = test_data) %>%
+  bind_cols(test_data)
+
+# 13. Compute RMSE on test set
+lasso_rmse_test <- rmse(lasso_preds, truth = covid_vax_pct, estimate = .pred)
+
+# Print RMSE
+lasso_rmse_test
+
+ggplot(lasso_preds, aes(x = covid_vax_pct, y = .pred, label = state)) +
+  geom_point(color = "dodgerblue3") +
+  geom_text(nudge_y = 1, size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "firebrick") +
+  labs(x = "Actual COVID Vax %", y = "Predicted", title = "LASSO: Prediction vs Test Set") +
+  theme_minimal()  # gridlines help
+```
+
+$\textbf{Model 3: Random Forest}$
+
+Our third model will be a random forest model. We will split the data as 60% training and 40% testing, same as before. Region and flu vaccine adherence will be used as predictors just like earlier.  The RMSE is 9.469237 for the testing data model.
+
+The plot shows the min_n parameter, which tells us the numebr of data points required to split a node. The more data points needed, the higher the RMSE. This may indicate underfitting.
+
+```{r}
+# Set seed for reproducibility
+set.seed(1234)
+
+# 1. Define the Random Forest model with tunable hyperparameters and variable importance
+rf_mod <- rand_forest(mtry = tune(), min_n = tune(), trees = 300) %>%
+  set_engine("ranger", seed = 1234, importance = "permutation") %>%
+  set_mode("regression")
+
+# 2. Create the recipe
+rf_rec <- recipe(covid_vax_pct ~ region + flu_vax_pct, data = train_data) %>%
+  step_novel(all_nominal_predictors()) %>%     # Handle unseen levels
+  step_dummy(all_nominal_predictors())         # Convert region to dummies
+
+# 3. Create the workflow
+rf_wf <- workflow() %>%
+  add_model(rf_mod) %>%
+  add_recipe(rf_rec)
+
+# 4. Set up 5-fold cross-validation
+cv_folds <- vfold_cv(train_data, v = 5)
+
+# 5. Create a grid of tuning parameters
+rf_grid <- grid_regular(
+  mtry(range = c(1, 5)),
+  min_n(range = c(1, 20)),
+  levels = 5
+)
+
+# 6. Tune the model using CV
+rf_tune_res <- tune_grid(
+  rf_wf,
+  resamples = cv_folds,
+  grid = rf_grid,
+  metrics = metric_set(rmse),
+  control = control_grid(save_pred = TRUE)
+)
+
+# 7. Collect tuning results and filter for RMSE
+rf_results <- collect_metrics(rf_tune_res) %>%
+  filter(.metric == "rmse")
+
+# 8. Plot RMSE across tuning grid
+ggplot(rf_results, aes(x = min_n, y = mean, color = factor(mtry))) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Random Forest Tuning Results",
+    x = "min_n",
+    y = "RMSE",
+    color = "mtry"
+  ) +
+  theme_minimal()
+
+# 9. Select best hyperparameters based on lowest RMSE
+best_rf <- select_best(rf_tune_res, metric = "rmse")
+
+# 10. Finalize the workflow using best hyperparameters
+final_rf <- finalize_workflow(rf_wf, best_rf)
+
+# 11. Fit the final model on full training data
+final_rf_fit <- final_rf %>% fit(data = train_data)
+
+# 12. View variable importance plot
+final_rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip()
+
+# 13. Evaluate on the test set
+test_preds <- predict(final_rf_fit, test_data) %>%
+  bind_cols(test_data)
+
+# 14. Compute test RMSE
+test_rmse <- rmse(test_preds, truth = covid_vax_pct, estimate = .pred)
+test_rmse
+
+# 15. Plot predicted vs. actual
+ggplot(test_preds, aes(x = covid_vax_pct, y = .pred, label = state)) +
+  geom_point(color = "dodgerblue3") +
+  geom_text(nudge_y = 1, size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "firebrick") +
+  labs(
+    x = "Actual COVID Vax %",
+    y = "Predicted COVID Vax %",
+    title = "Random Forest: Prediction vs Test Set"
+  ) +
+  theme_minimal()
+```
+
+### Which model is best?
+
+I think the random forest model is best, despite having the intermdiate RMSE (9.469237). The lasso regression model gives reason to be concerned about underfitting, and that the lower RMSE may be due to overshrinkage. The random forest model can handle more complex relationships than the simple linear model. Below is a plot of the observed vs predicted values for the random forest model, which doesn't look great, but it's not worrse than the others.
+
+```{r}
+
+# Plot prediction vs actual for the Random Forest model
+ggplot(test_preds, aes(x = covid_vax_pct, y = .pred, label = state)) +
+  geom_point(color = "dodgerblue3") +
+  geom_text(nudge_y = 1, size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "firebrick") +
+  labs(
+    x = "Actual COVID Vax %",
+    y = "Predicted COVID Vax %",
+    title = "Random Forest: Prediction vs Test Set"
+  ) +
+  theme_minimal()
+```
+
+### Discussion
+
+Linear regression, LASSO regression, and random forest models were created and cross-validated to study the regional differences of COVID vaccine complicance among hosptial workers. RMSE was used as a form of evialuation, but underfitting and complexity were additionally considered. The LASSO regression model had the lowest RMSE, but was not chosen due to underfitting, consequently, the random forest mdoel was selected due to lower concerns for underfitting and ability to handle complex relationships.
+
+After adjusting for geographical regions of the United States, the most significant predictor was found to be flu shot adherence among hospital workers rather than geographical region, as shown below. 
+
+```{r}
+final_rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip()
+
+```
